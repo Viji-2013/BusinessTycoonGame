@@ -19,7 +19,7 @@ struct Product: Identifiable, Hashable, Codable {
     }
 }
 
-struct Employee: Identifiable, Codable {
+struct Employee: Identifiable, Hashable, Codable {
     let id: UUID
     var name: String
     var role: String
@@ -29,24 +29,6 @@ struct Employee: Identifiable, Codable {
     var experience: Double
     var level: Int
     var ordersServed: Int = 0
-
-    enum Role: String, CaseIterable {
-        case barista = "Barista"
-        case cashier = "Cashier"
-        case cook = "Cook"
-        case manager = "Manager"
-        case executive = "Executive"
-
-        var baseSalary: Double {
-            switch self {
-            case .barista: return 18.0
-            case .cashier: return 17.0
-            case .cook: return 22.0
-            case .manager: return 35.0
-            case .executive: return 65.0
-            }
-        }
-    }
 
     init(name: String, role: String, salary: Double) {
         self.id = UUID()
@@ -60,7 +42,7 @@ struct Employee: Identifiable, Codable {
     }
 }
 
-struct InventoryItem: Identifiable, Codable {
+struct InventoryItem: Identifiable, Hashable, Codable {
     let id: UUID
     var name: String
     var quantity: Int
@@ -78,7 +60,7 @@ struct InventoryItem: Identifiable, Codable {
     }
 }
 
-struct Stock: Identifiable, Codable {
+struct Stock: Identifiable, Hashable, Codable {
     let id: UUID
     var symbol: String
     var name: String
@@ -113,33 +95,28 @@ struct Stock: Identifiable, Codable {
 
 struct Order: Identifiable, Codable {
     let id: UUID
-    var products: [String: Int]
+    var items: [String: Int]
     var totalPrice: Double
-    var status: OrderStatus
-    var completedBy: String?
-    var timestamp: Date
+    var status: String
+    var createdAt: Date
 
-    enum OrderStatus: String, Codable {
-        case pending, preparing, completed, cancelled
-    }
-
-    init(products: [String: Int], totalPrice: Double) {
+    init(items: [String: Int], totalPrice: Double) {
         self.id = UUID()
-        self.products = products
+        self.items = items
         self.totalPrice = totalPrice
-        self.status = .pending
-        self.timestamp = Date()
+        self.status = "Pending"
+        self.createdAt = Date()
     }
 }
 
-struct BusinessDaySummary: Identifiable, Codable {
+struct DailySummary: Identifiable, Codable {
     let id: UUID
-    let day: Int
-    let revenue: Double
-    let expenses: Double
-    let profit: Double
-    let ordersCompleted: Int
-    let customersServed: Int
+    var day: Int
+    var revenue: Double
+    var expenses: Double
+    var profit: Double
+    var ordersCompleted: Int
+    var customersServed: Int
 
     init(day: Int, revenue: Double, expenses: Double, profit: Double, ordersCompleted: Int, customersServed: Int) {
         self.id = UUID()
@@ -155,275 +132,128 @@ struct BusinessDaySummary: Identifiable, Codable {
 class GameState: ObservableObject {
     @Published var cash: Double = 5000
     @Published var netWorth: Double = 5000
-    @Published var reputation: Double = 55
+    @Published var reputation: Double = 60
     @Published var day: Int = 1
     @Published var storeLevel: Int = 1
     @Published var employees: [Employee]
     @Published var products: [Product]
     @Published var inventory: [String: Int]
     @Published var inventoryItems: [InventoryItem]
-    @Published var dailyHistory: [BusinessDaySummary] = []
-    @Published var orders: [Order] = []
+    @Published var orders: [Order]
     @Published var stocks: [Stock]
+    @Published var history: [DailySummary]
     @Published var dailyRevenue: Double = 0
     @Published var dailyExpenses: Double = 0
-    @Published var isPaused: Bool = false
-    @Published var gameSpeed: Double = 1.0
-    @Published var autoWorkEnabled: Bool = true
-    @Published var totalOrdersCompleted: Int = 0
     @Published var totalCustomersServed: Int = 0
+    @Published var totalOrdersCompleted: Int = 0
+    @Published var autoWorkEnabled: Bool = true
+    @Published var isPaused: Bool = false
 
-    private var gameTimer: Timer?
+    private var timer: Timer?
 
     init() {
         self.products = [
-            Product(name: "Espresso", cost: 1.20, price: 4.50, prepTime: 1.0, category: "Beverages"),
-            Product(name: "Latte", cost: 2.10, price: 6.00, prepTime: 2.0, category: "Beverages"),
-            Product(name: "Cappuccino", cost: 2.30, price: 6.50, prepTime: 2.0, category: "Beverages"),
-            Product(name: "Americano", cost: 1.50, price: 4.00, prepTime: 1.5, category: "Beverages"),
-            Product(name: "Macchiato", cost: 2.40, price: 6.00, prepTime: 2.0, category: "Beverages"),
-            Product(name: "Croissant", cost: 1.50, price: 4.00, prepTime: 1.5, category: "Pastries"),
-            Product(name: "Blueberry Muffin", cost: 1.20, price: 3.50, prepTime: 1.0, category: "Pastries"),
-            Product(name: "Chocolate Cake", cost: 2.00, price: 5.00, prepTime: 1.5, category: "Pastries"),
-            Product(name: "Tea", cost: 0.90, price: 3.50, prepTime: 1.0, category: "Beverages"),
-            Product(name: "Sandwich", cost: 3.50, price: 8.00, prepTime: 3.0, category: "Food")
+            Product(name: "Espresso", cost: 1.20, price: 4.50, prepTime: 1.0, category: "Beverage"),
+            Product(name: "Latte", cost: 2.10, price: 6.00, prepTime: 2.0, category: "Beverage"),
+            Product(name: "Cappuccino", cost: 2.30, price: 6.50, prepTime: 2.0, category: "Beverage"),
+            Product(name: "Tea", cost: 0.90, price: 3.50, prepTime: 1.0, category: "Beverage"),
+            Product(name: "Croissant", cost: 1.50, price: 4.00, prepTime: 1.5, category: "Food"),
+            Product(name: "Muffin", cost: 1.20, price: 3.50, prepTime: 1.0, category: "Food"),
+            Product(name: "Sandwich", cost: 2.80, price: 7.50, prepTime: 2.5, category: "Food")
         ]
 
         self.employees = [
-            Employee(name: "Alex", role: Employee.Role.barista.rawValue, salary: 18.00),
-            Employee(name: "Sam", role: Employee.Role.cashier.rawValue, salary: 17.00)
-        ]
-
-        self.inventoryItems = [
-            InventoryItem(name: "Coffee Beans", quantity: 50, maxCapacity: 100, cost: 5.00),
-            InventoryItem(name: "Milk", quantity: 30, maxCapacity: 50, cost: 2.50),
-            InventoryItem(name: "Sugar", quantity: 40, maxCapacity: 80, cost: 1.50),
-            InventoryItem(name: "Flour", quantity: 35, maxCapacity: 70, cost: 3.00),
-            InventoryItem(name: "Butter", quantity: 20, maxCapacity: 40, cost: 4.00),
-            InventoryItem(name: "Eggs", quantity: 60, maxCapacity: 100, cost: 0.50),
-            InventoryItem(name: "Tea Leaves", quantity: 25, maxCapacity: 50, cost: 3.50)
+            Employee(name: "Alex", role: "Barista", salary: 18.0),
+            Employee(name: "Sam", role: "Cashier", salary: 17.0)
         ]
 
         self.inventory = [
-            "Espresso": 30,
-            "Latte": 25,
-            "Cappuccino": 25,
-            "Americano": 20,
-            "Macchiato": 20,
-            "Croissant": 40,
-            "Blueberry Muffin": 35,
-            "Chocolate Cake": 15,
-            "Tea": 35,
-            "Sandwich": 10
+            "Espresso": 25,
+            "Latte": 20,
+            "Cappuccino": 18,
+            "Tea": 30,
+            "Croissant": 25,
+            "Muffin": 20,
+            "Sandwich": 12
         ]
 
+        self.inventoryItems = [
+            InventoryItem(name: "Coffee Beans", quantity: 45, maxCapacity: 100, cost: 3.0),
+            InventoryItem(name: "Milk", quantity: 35, maxCapacity: 80, cost: 2.0),
+            InventoryItem(name: "Sugar", quantity: 40, maxCapacity: 90, cost: 1.0),
+            InventoryItem(name: "Flour", quantity: 30, maxCapacity: 80, cost: 1.8),
+            InventoryItem(name: "Tea Leaves", quantity: 20, maxCapacity: 60, cost: 2.5)
+        ]
+
+        self.orders = []
         self.stocks = [
-            Stock(symbol: "BREW", name: "BrewCorp", price: 45.50, volatility: 0.08),
-            Stock(symbol: "CAFFEINE", name: "Caffeine Inc", price: 32.00, volatility: 0.06),
-            Stock(symbol: "BEAN", name: "Bean Traders", price: 28.75, volatility: 0.07),
-            Stock(symbol: "FOOD", name: "Food Industries", price: 55.25, volatility: 0.05),
-            Stock(symbol: "RETAIL", name: "Retail Corp", price: 40.00, volatility: 0.06),
-            Stock(symbol: "TECH", name: "Tech Solutions", price: 125.50, volatility: 0.10)
+            Stock(symbol: "BREW", name: "BrewCo", price: 45.50),
+            Stock(symbol: "BEAN", name: "BeanWorks", price: 32.10),
+            Stock(symbol: "FOOD", name: "Food Industries", price: 68.00),
+            Stock(symbol: "TECH", name: "TechNova", price: 120.20)
         ]
 
-        dailyHistory = [
-            BusinessDaySummary(day: 1, revenue: 0, expenses: 0, profit: 0, ordersCompleted: 0, customersServed: 0)
+        self.history = [
+            DailySummary(day: 1, revenue: 0, expenses: 0, profit: 0, ordersCompleted: 0, customersServed: 0)
         ]
 
-        startAutoWork()
+        startAutoSimulation()
     }
 
-    func startAutoWork() {
-        gameTimer = Timer.scheduledTimer(withTimeInterval: 2.0 / gameSpeed, repeats: true) { [weak self] _ in
-            if self?.autoWorkEnabled == true && self?.isPaused == false {
-                self?.serveRandomCustomer()
-                self?.updateStockPrices()
+    func startAutoSimulation() {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            if !self.isPaused && self.autoWorkEnabled {
+                self.serveRandomOrder()
+                self.updateStocks()
             }
         }
     }
 
-    func pauseGame() {
+    func togglePause() {
         isPaused.toggle()
     }
 
-    func setGameSpeed(_ speed: Double) {
-        gameSpeed = speed
-        gameTimer?.invalidate()
-        startAutoWork()
-    }
+    func serveRandomOrder() {
+        let orderSize = Int.random(in: 1...3)
+        var itemDict: [String: Int] = [:]
+        var total = 0.0
 
-    func serveRandomCustomer() {
-        let numItems = Int.random(in: 1...3)
-        var order: [String: Int] = [:]
-        var totalCost: Double = 0
+        for _ in 0..<orderSize {
+            guard let product = products.randomElement() else { continue }
+            let quantity = Int.random(in: 1...2)
 
-        for _ in 0..<numItems {
-            if let product = products.randomElement() {
-                let qty = Int.random(in: 1...2)
-                order[product.name, default: 0] += qty
-
-                if inventory[product.name, default: 0] >= qty {
-                    inventory[product.name, default: 0] -= qty
-                    totalCost += product.price * Double(qty)
-                } else {
-                    return
-                }
+            if inventory[product.name, default: 0] >= quantity {
+                inventory[product.name, default: 0] -= quantity
+                itemDict[product.name, default: 0] += quantity
+                total += product.price * Double(quantity)
             }
         }
 
-        if !order.isEmpty {
-            let newOrder = Order(products: order, totalPrice: totalCost)
-            orders.append(newOrder)
+        guard !itemDict.isEmpty else { return }
 
-            cash += totalCost
-            netWorth += totalCost
-            dailyRevenue += totalCost
-            reputation += 0.3
-            totalCustomersServed += 1
+        var newOrder = Order(items: itemDict, totalPrice: total)
+        orders.append(newOrder)
 
-            if let randomEmployee = employees.randomElement() {
-                var updatedEmployee = randomEmployee
-                updatedEmployee.ordersServed += 1
-                updatedEmployee.experience += 0.5
-                updatedEmployee.happiness = min(1.0, updatedEmployee.happiness + 0.01)
+        cash += total
+        netWorth += total
+        dailyRevenue += total
+        totalCustomersServed += 1
 
-                if let index = employees.firstIndex(where: { $0.id == randomEmployee.id }) {
-                    employees[index] = updatedEmployee
-                }
-            }
-
-            completeOrder(newOrder)
-        }
-    }
-
-    func completeOrder(_ order: Order) {
-        if let index = orders.firstIndex(where: { $0.id == order.id }) {
-            var completedOrder = orders[index]
-            completedOrder.status = .completed
-            completedOrder.completedBy = employees.randomElement()?.name ?? "Staff"
-            orders[index] = completedOrder
-            totalOrdersCompleted += 1
-        }
-    }
-
-    func nextDay() {
-        day += 1
-
-        let wages = employees.reduce(0.0) { $0 + $1.salary }
-        dailyExpenses += wages
-        cash -= wages
-        netWorth -= wages
-
-        let operational = Double(storeLevel * 120) + 50
-        dailyExpenses += operational
-        cash -= operational
-        netWorth -= operational
-
-        let profit = dailyRevenue - dailyExpenses
-
-        dailyHistory.append(BusinessDaySummary(
-            day: day,
-            revenue: dailyRevenue,
-            expenses: dailyExpenses,
-            profit: profit,
-            ordersCompleted: totalOrdersCompleted,
-            customersServed: totalCustomersServed
-        ))
-
-        if profit > 0 {
-            reputation += 2.0
-        } else {
-            reputation -= 1.5
-        }
-
-        reputation = min(100, max(0, reputation))
-        orders.removeAll()
-        dailyRevenue = 0
-        dailyExpenses = 0
-        totalOrdersCompleted = 0
-        totalCustomersServed = 0
-
-        updateStockPrices()
-    }
-
-    func updateStockPrices() {
-        for i in 0..<stocks.count {
-            let change = stocks[i].trend + Double.random(in: -stocks[i].volatility...stocks[i].volatility)
-            stocks[i].previousPrice = stocks[i].currentPrice
-            stocks[i].currentPrice *= (1 + change)
-            stocks[i].currentPrice = max(1, stocks[i].currentPrice)
-            stocks[i].trend = change * 0.7 + Double.random(in: -0.01...0.01)
-        }
-    }
-
-    func buyStock(_ stock: Stock, shares: Int) {
-        let cost = stock.currentPrice * Double(shares)
-        if cash >= cost {
-            cash -= cost
-            netWorth -= cost
-
-            if let index = stocks.firstIndex(where: { $0.id == stock.id }) {
-                stocks[index].shares += shares
+        if let employee = employees.randomElement() {
+            if let index = employees.firstIndex(where: { $0.id == employee.id }) {
+                var updated = employees[index]
+                updated.ordersServed += 1
+                updated.experience += 0.5
+                updated.happiness = min(1.0, updated.happiness + 0.02)
+                employees[index] = updated
             }
         }
-    }
 
-    func sellStock(_ stock: Stock, shares: Int) {
-        if let index = stocks.firstIndex(where: { $0.id == stock.id }), stocks[index].shares >= shares {
-            let revenue = stock.currentPrice * Double(shares)
-            cash += revenue
-            netWorth += revenue
-            stocks[index].shares -= shares
-        }
-    }
-
-    func promoteEmployee(_ employee: Employee) {
-        if let index = employees.firstIndex(where: { $0.id == employee.id }) {
-            var updatedEmployee = employees[index]
-            updatedEmployee.level += 1
-            updatedEmployee.salary *= 1.2
-            updatedEmployee.skill = min(1.0, updatedEmployee.skill + 0.1)
-            updatedEmployee.happiness = min(1.0, updatedEmployee.happiness + 0.2)
-            employees[index] = updatedEmployee
-        }
-    }
-
-    func demoteEmployee(_ employee: Employee) {
-        if let index = employees.firstIndex(where: { $0.id == employee.id }), employees[index].level > 1 {
-            var updatedEmployee = employees[index]
-            updatedEmployee.level -= 1
-            updatedEmployee.salary *= 0.85
-            updatedEmployee.happiness = max(0, updatedEmployee.happiness - 0.2)
-            employees[index] = updatedEmployee
-        }
-    }
-
-    func fireEmployee(_ employee: Employee) {
-        employees.removeAll { $0.id == employee.id }
-        cash += 50
-        netWorth += 50
-    }
-
-    func addProduct(_ product: Product) {
-        products.append(product)
-        inventory[product.name] = 0
-    }
-
-    func removeProduct(_ product: Product) {
-        products.removeAll { $0.id == product.id }
-        inventory.removeValue(forKey: product.name)
-    }
-
-    func restockInventory(_ item: InventoryItem) {
-        let cost = Double(item.maxCapacity - item.quantity) * item.cost
-        if cash >= cost {
-            cash -= cost
-            netWorth -= cost
-            dailyExpenses += cost
-
-            if let index = inventoryItems.firstIndex(where: { $0.id == item.id }) {
-                inventoryItems[index].quantity = inventoryItems[index].maxCapacity
-            }
+        totalOrdersCompleted += 1
+        if let idx = orders.firstIndex(where: { $0.id == newOrder.id }) {
+            orders[idx].status = "Completed"
         }
     }
 
@@ -435,47 +265,154 @@ class GameState: ObservableObject {
             dailyExpenses += cost
 
             for i in 0..<inventoryItems.count {
-                inventoryItems[i].quantity = min(
-                    inventoryItems[i].maxCapacity,
-                    inventoryItems[i].quantity + Int.random(in: 10...20)
-                )
+                inventoryItems[i].quantity = min(inventoryItems[i].maxCapacity, inventoryItems[i].quantity + Int.random(in: 10...20))
             }
         }
     }
 
     func hireEmployee() {
-        let roles = Employee.Role.allCases
-        let selectedRole = roles.randomElement() ?? .barista
+        let roles = ["Barista", "Cashier", "Cook", "Manager"]
         let newEmployee = Employee(
             name: randomName(),
-            role: selectedRole.rawValue,
-            salary: selectedRole.baseSalary
+            role: roles.randomElement() ?? "Barista",
+            salary: Double.random(in: 18...40)
         )
 
-        let hiringCost = 150.0
-        if cash >= hiringCost {
-            cash -= hiringCost
-            netWorth -= hiringCost
+        if cash >= 150 {
+            cash -= 150
+            netWorth -= 150
             employees.append(newEmployee)
         }
     }
 
+    func fireEmployee(_ employee: Employee) {
+        employees.removeAll { $0.id == employee.id }
+        cash += 50
+        netWorth += 50
+    }
+
+    func promoteEmployee(_ employee: Employee) {
+        if let idx = employees.firstIndex(where: { $0.id == employee.id }) {
+            var updated = employees[idx]
+            updated.level += 1
+            updated.salary *= 1.2
+            updated.skill = min(1.0, updated.skill + 0.08)
+            updated.happiness = min(1.0, updated.happiness + 0.1)
+            employees[idx] = updated
+        }
+    }
+
+    func demoteEmployee(_ employee: Employee) {
+        if let idx = employees.firstIndex(where: { $0.id == employee.id }), employees[idx].level > 1 {
+            var updated = employees[idx]
+            updated.level -= 1
+            updated.salary *= 0.9
+            updated.happiness = max(0.0, updated.happiness - 0.1)
+            employees[idx] = updated
+        }
+    }
+
     func upgradeStore() {
-        let upgradeCost = Double(storeLevel * 500 + 250)
-        if cash >= upgradeCost {
-            cash -= upgradeCost
-            netWorth -= upgradeCost
+        let cost = Double(storeLevel * 500 + 250)
+        if cash >= cost {
+            cash -= cost
+            netWorth -= cost
             storeLevel += 1
             reputation += 8
         }
     }
 
+    func addProduct(_ product: Product) {
+        products.append(product)
+        inventory[product.name] = 10
+    }
+
+    func removeProduct(_ product: Product) {
+        products.removeAll { $0.id == product.id }
+        inventory.removeValue(forKey: product.name)
+    }
+
+    func buyStock(_ stock: Stock, shares: Int) {
+        let cost = stock.currentPrice * Double(shares)
+        if cash >= cost {
+            cash -= cost
+            netWorth -= cost
+
+            if let idx = stocks.firstIndex(where: { $0.id == stock.id }) {
+                stocks[idx].shares += shares
+            }
+        }
+    }
+
+    func sellStock(_ stock: Stock, shares: Int) {
+        if let idx = stocks.firstIndex(where: { $0.id == stock.id }), stocks[idx].shares >= shares {
+            let revenue = stock.currentPrice * Double(shares)
+            cash += revenue
+            netWorth += revenue
+            stocks[idx].shares -= shares
+        }
+    }
+
+    func updateStocks() {
+        for i in 0..<stocks.count {
+            let tick = stocks[i].trend + Double.random(in: -stocks[i].volatility...stocks[i].volatility)
+            stocks[i].previousPrice = stocks[i].currentPrice
+            stocks[i].currentPrice = max(1.0, stocks[i].currentPrice * (1 + tick))
+            stocks[i].trend = tick * 0.8
+        }
+    }
+
+    func nextDay() {
+        day += 1
+        let wages = employees.reduce(0.0) { $0 + $1.salary }
+        cash -= wages
+        netWorth -= wages
+        dailyExpenses += wages
+
+        let fixedCosts = Double(storeLevel * 120 + 50)
+        cash -= fixedCosts
+        netWorth -= fixedCosts
+        dailyExpenses += fixedCosts
+
+        let profit = dailyRevenue - dailyExpenses
+
+        history.append(
+            DailySummary(
+                day: day,
+                revenue: dailyRevenue,
+                expenses: dailyExpenses,
+                profit: profit,
+                ordersCompleted: totalOrdersCompleted,
+                customersServed: totalCustomersServed
+            )
+        )
+
+        if profit > 0 {
+            reputation += 2
+        } else {
+            reputation -= 1.5
+        }
+
+        reputation = min(100, max(0, reputation))
+        dailyRevenue = 0
+        dailyExpenses = 0
+        totalOrdersCompleted = 0
+        totalCustomersServed = 0
+        orders = []
+
+        updateStocks()
+    }
+
+    func stockValue() -> Double {
+        stocks.reduce(0) { $0 + Double($1.shares) * $1.currentPrice }
+    }
+
     private func randomName() -> String {
-        let names = ["Jordan", "Morgan", "Taylor", "Casey", "Parker", "Jamie", "Riley", "Avery", "Alex", "Jordan", "Sam", "Chris"]
+        let names = ["Jordan", "Morgan", "Taylor", "Avery", "Jamie", "Chris", "Casey", "Parker", "Riley", "Drew"]
         return names.randomElement() ?? "Employee"
     }
 
     deinit {
-        gameTimer?.invalidate()
+        timer?.invalidate()
     }
 }
